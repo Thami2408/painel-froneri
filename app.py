@@ -366,6 +366,7 @@ elif st.session_state.tela == "resumo":
         dfr["_c"]  = dfr[cc].astype(str).str.upper().str.strip() if cc else ""
         dfr["_cx"] = dfr[ccx].apply(safe_int) if ccx else 0
         dfr["_vl"] = dfr[cvl].apply(parse_valor) if cvl else 0.0
+        dfr.loc[dfr[cvl].astype(str).str.contains("DEV", case=False, na=False), "_vl"] *= -1
         # Soma direta — devoluções já vêm com valor negativo no Sheets
         imp = dfr[dfr["_c"].str.contains("IMPULSO", na=False)]
         th  = dfr[dfr["_c"].str.contains("TAKE HOME|NOBRELLI|MONDELEZ|NESTL|PRIVATE|CANAL PRO|GAROTO", na=False) & ~dfr["_c"].str.contains("IMPULSO", na=False)]
