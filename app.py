@@ -573,7 +573,7 @@ elif st.session_state.tela == "painel":
                     with c1r:
                         if st.button("💾 Salvar", key=f"salvar_r_{chave_r}"):
                             if txt_r.strip():
-                                erro_r = salvar_justificativa(_vend_fn, nome, sid, txt_r.strip())
+                                erro_r = salvar_justificativa(st.session_state.get("vend", ""), nome, sid, txt_r.strip())
                                 carregar_justificativas.clear()
                                 if not erro_r:
                                     st.success("✅ Justificativa salva!")
