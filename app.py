@@ -616,7 +616,7 @@ if st.session_state.tela == "painel":
                         if st.button("💾 Salvar", key=f"salvar_r_{chave_r}"):
                             if txt_r.strip():
                                 erro_r = salvar_justificativa(st.session_state.get("vend", ""), nome, sid, txt_r.strip())
-                                carregar_justificativas.clear()
+                                st.cache_data.clear()
                                 if not erro_r:
                                     st.success("✅ Justificativa salva!")
                                     st.session_state[chave_aberto_r] = False
@@ -642,11 +642,13 @@ if st.session_state.tela == "painel":
 
     aba_hoje, aba_ontem, aba_semana, aba_rupt = st.tabs(["Hoje", "Ontem", "Semana toda", "📋 Base de clientes"])
 
+    df_just = carregar_justificativas()
+
     with aba_hoje:
-        render_clientes(clientes_hoje, f"Roteiro de hoje · {dia_hoje}")
+        render_clientes(clientes_hoje, f"Roteiro de hoje · {dia_hoje}", df_just)
 
     with aba_ontem:
-        render_clientes(clientes_ontem, f"Ontem · {dia_ontem}")
+        render_clientes(clientes_ontem, f"Ontem · {dia_ontem}", df_just)
 
     with aba_semana:
         dias_ordem = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado","Domingo"]
@@ -654,7 +656,7 @@ if st.session_state.tela == "painel":
             sem = semana_hoje
             cl  = dfv[(dfv["_dia"]==dia) & dfv["_freq"].apply(lambda f: visita_hoje(f, sem))]
             if not cl.empty:
-                render_clientes(cl, dia)
+                render_clientes(cl, dia, df_just)
 
     with aba_rupt:
         st.markdown('<div class="slbl">Base de clientes</div>', unsafe_allow_html=True)
@@ -776,7 +778,7 @@ if st.session_state.tela == "painel":
                             if txt.strip():
                                 erro = salvar_justificativa(vend, nome, sid, txt.strip())
                                 st.session_state["cliente_aberto"] = None
-                                carregar_justificativas.clear()
+                                st.cache_data.clear()
                                 if erro:
                                     st.warning(f"Salvo localmente. Erro no Sheets: {erro}")
                                 else:
