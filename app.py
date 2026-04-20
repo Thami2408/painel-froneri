@@ -525,7 +525,7 @@ elif st.session_state.tela == "painel":
             th_cls   = "stv v" if th  > 0 else "stv z"
 
             # Justificativa badge para ruptura
-            chave_r = f"{sid}_{vendedor_sel}"
+            chave_r = f"{sid}_{vend}"
             if "justificativas_salvas" not in st.session_state:
                 st.session_state["justificativas_salvas"] = {}
             just_salva_r = st.session_state["justificativas_salvas"].get(chave_r, {}).get("justificativa", "")
@@ -571,7 +571,7 @@ elif st.session_state.tela == "painel":
                     with c1r:
                         if st.button("💾 Salvar", key=f"salvar_r_{chave_r}"):
                             if txt_r.strip():
-                                erro_r = salvar_justificativa(vendedor_sel, nome, sid, txt_r.strip())
+                                erro_r = salvar_justificativa(vend, nome, sid, txt_r.strip())
                                 carregar_justificativas.clear()
                                 if not erro_r:
                                     st.success("✅ Justificativa salva!")
