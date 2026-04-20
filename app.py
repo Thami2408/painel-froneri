@@ -589,10 +589,13 @@ elif st.session_state.tela == "painel":
                 ws = sh.worksheet("RUPTURA")
                 headers = ws.row_values(1)
                 headers = [h.strip() for h in headers]
-                # Coluna do ID do cliente (Sold)
-                try:
-                    col_id = headers.index("Sold") + 1
-                except ValueError:
+                # Coluna do ID do cliente
+                col_id = None
+                for nome in ["Customer Number", "Sold", "sold", "customer number", "ID", "id"]:
+                    if nome in headers:
+                        col_id = headers.index(nome) + 1
+                        break
+                if col_id is None:
                     col_id = 1
                 # Coluna Justificativas
                 try:
@@ -643,8 +646,9 @@ elif st.session_state.tela == "painel":
             just_salva = ""
             if chave in st.session_state["justificativas_salvas"]:
                 just_salva = st.session_state["justificativas_salvas"][chave]["justificativa"]
-            elif not df_just.empty and "Sold" in df_just.columns and "Justificativas" in df_just.columns:
-                df_fil = df_just[df_just["Sold"].astype(str).str.strip() == str(sid).strip()]
+            elif not df_just.empty and "Justificativas" in df_just.columns:
+                col_id_just = "Customer Number" if "Customer Number" in df_just.columns else "Sold" if "Sold" in df_just.columns else df_just.columns[0]
+                df_fil = df_just[df_just[col_id_just].astype(str).str.strip() == str(sid).strip()]
                 if not df_fil.empty:
                     val = str(df_fil.iloc[0].get("Justificativas","")).strip()
                     if val and val.lower() not in ["nan","none",""]:
