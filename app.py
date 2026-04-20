@@ -19,7 +19,7 @@ def topbar(titulo, sub):
       <div class="sub">{sub}</div>
     </div>"""
 
-SHEET_ID = "1ewXcWuiLOCtv609Y-xKKg-qQwOuu21Bq"
+SHEET_ID = "1WsCcvV4M_jDl35EfXz_ryV3FeZmKzJwaO91ZfB68gAI"
 DIAS_PT = {0:"Segunda-feira",1:"Terça-feira",2:"Quarta-feira",3:"Quinta-feira",4:"Sexta-feira",5:"Sábado",6:"Domingo"}
 
 st.set_page_config(page_title="Painel Froneri", page_icon="🧊", layout="centered", initial_sidebar_state="collapsed")
