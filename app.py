@@ -440,7 +440,26 @@ elif st.session_state.tela == "resumo":
 # ════════════════════════════════════════════════════════════════════════════
 # TELA 2 — PAINEL DO VENDEDOR
 # ════════════════════════════════════════════════════════════════════════════
-# ── Salvar justificativa na coluna Justificativas da aba RUPTURA ──
+# ── Carregar justificativas da aba RUPTURA ────────────────────────────────
+@st.cache_data(ttl=120)
+def carregar_justificativas():
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet("RUPTURA")
+        data = ws.get_all_records()
+        df_j = pd.DataFrame(data)
+        df_j.columns = df_j.columns.str.strip()
+        return df_j
+    except Exception:
+        return pd.DataFrame()
+
+# ── Salvar justificativa na coluna Justificativas da aba RUPTURA ──────────
 def salvar_justificativa(vendedor, cliente, sid, justificativa):
     chave = f"{sid}_{vendedor}"
     if "justificativas_salvas" not in st.session_state:
@@ -664,27 +683,6 @@ if st.session_state.tela == "painel":
                         "4 Meses":"rupt3","3 Meses":"rupt3","2 Meses":"rupt2",
                         "1 Mês":"rupt1","SEM KV":"rupt2","C/ Compra":"rupt0",
                         "c/ compra":"rupt0","c/compra":"rupt0","Cliente Novo":"rupt0"}
-
-        # ── Carregar justificativas da aba RUPTURA ────────────────────
-        @st.cache_data(ttl=120)
-        def carregar_justificativas():
-            try:
-                import gspread
-                from google.oauth2.service_account import Credentials
-                creds_dict = dict(st.secrets["gcp_service_account"])
-                scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-                creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-                gc = gspread.authorize(creds)
-                sh = gc.open_by_key(SHEET_ID)
-                ws = sh.worksheet("RUPTURA")
-                data = ws.get_all_records()
-                df_j = pd.DataFrame(data)
-                df_j.columns = df_j.columns.str.strip()
-                return df_j
-            except Exception:
-                return pd.DataFrame()
-
-
 
         # ── Estado para cliente selecionado ───────────────────────────
         if "cliente_aberto" not in st.session_state:
