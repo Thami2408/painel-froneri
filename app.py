@@ -145,14 +145,28 @@ def achar_col(df, nomes):
                 return c
     return None
 
-@st.cache_data(ttl=3600)
+@st.cache_resource
+def get_gc():
+    import gspread
+    from google.oauth2.service_account import Credentials
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(creds)
+
+def ws_to_df(ws):
+    data = ws.get_all_records()
+    df = pd.DataFrame(data)
+    df.columns = df.columns.str.strip()
+    df = df.dropna(how="all")
+    return df
+
 def carregar_roteiro():
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-        r = requests.get(url, timeout=30)
-        df = pd.read_excel(io.BytesIO(r.content), sheet_name="BASE ATIVA - ROTEIRIZADA", engine="openpyxl")
-        df.columns = df.columns.str.strip()
-        df = df.dropna(how="all")
+        gc = get_gc()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet("BASE ATIVA - ROTEIRIZADA")
+        df = ws_to_df(ws)
 
         col_id     = achar_col(df, ["sold","customer nu","numero","número","codigo","código"]) or df.columns[0]
         col_nome   = achar_col(df, ["customer name","razao","razão","nome"]) or df.columns[1]
@@ -189,11 +203,10 @@ def carregar_roteiro():
 @st.cache_data(ttl=300)
 def carregar_vendas():
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-        r = requests.get(url, timeout=30)
-        df = pd.read_excel(io.BytesIO(r.content), sheet_name="VENDAS", engine="openpyxl")
-        df.columns = df.columns.str.strip()
-        df = df.dropna(how="all")
+        gc = get_gc()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet("VENDAS")
+        df = ws_to_df(ws)
 
         col_status = achar_col(df, ["status"])
         col_cat    = achar_col(df, ["categoria","category"])
@@ -269,7 +282,7 @@ if st.session_state.tela == "selecao":
 
     col_r1, col_r2 = st.columns([3,1])
     with col_r2:
-        if st.button("📊 Gerencial"):
+        if st.button("📊 Acesso ao Painel Gerencial"):
             st.session_state.tela = "resumo_login"
             st.rerun()
 
@@ -328,18 +341,19 @@ elif st.session_state.tela == "resumo_login":
 elif st.session_state.tela == "resumo":
     st.markdown(topbar("Resumo Gerencial", "Visão consolidada do mês"), unsafe_allow_html=True)
 
-    # Carregar vendas para resumo
+    if st.button("← Voltar"):
+        st.session_state.tela = "selecao"
+        st.rerun()
+
     def fmt_brl(v):
         s = f"{v:,.2f}".replace(",","X").replace(".",",").replace("X",".")
         return f"R$ {s}"
 
     try:
-        import requests, io as _io
-        url2 = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-        r2 = requests.get(url2, timeout=30)
-        dfr = pd.read_excel(_io.BytesIO(r2.content), sheet_name="VENDAS", engine="openpyxl")
-        dfr.columns = dfr.columns.str.strip()
-        dfr = dfr.dropna(how="all")
+        gc2 = get_gc()
+        sh2 = gc2.open_by_key(SHEET_ID)
+        ws2 = sh2.worksheet("VENDAS")
+        dfr = ws_to_df(ws2)
 
         def ac2(nomes):
             for n in nomes:
@@ -355,7 +369,9 @@ elif st.session_state.tela == "resumo":
         dfr["_c"]  = dfr[cc].astype(str).str.upper().str.strip() if cc else ""
         dfr["_cx"] = dfr[ccx].apply(safe_int) if ccx else 0
         dfr["_vl"] = dfr[cvl].apply(parse_valor) if cvl else 0.0
-        # Soma direta — devoluções já vêm com valor negativo no Sheets
+        # Devoluções entram com valor negativo para descontar do total
+        dfr.loc[dfr["_s"].str.upper() == "DEVOLUÇÃO", "_vl"] *= -1
+        dfr.loc[dfr["_s"].str.upper() == "DEVOLUÇÃO", "_cx"] *= -1
         imp = dfr[dfr["_c"].str.contains("IMPULSO", na=False)]
         th  = dfr[dfr["_c"].str.contains("TAKE HOME|NOBRELLI|MONDELEZ|NESTL|PRIVATE|CANAL PRO|GAROTO", na=False) & ~dfr["_c"].str.contains("IMPULSO", na=False)]
 
@@ -417,10 +433,7 @@ elif st.session_state.tela == "resumo":
   <div style="display:flex;flex-wrap:wrap;gap:4px;">{cats_html}</div>
 </div>""", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("← Voltar"):
-        st.session_state.tela = "selecao"
-        st.rerun()
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # TELA 2 — PAINEL DO VENDEDOR
@@ -479,7 +492,7 @@ elif st.session_state.tela == "painel":
       </div>
     </div>""", unsafe_allow_html=True)
 
-    def render_clientes(df_lista, label):
+    def render_clientes(df_lista, label, df_just=None):
         st.markdown(f'<div class="slbl">{label} · {len(df_lista)} clientes</div>', unsafe_allow_html=True)
         if df_lista.empty:
             st.info("Nenhuma visita programada.")
@@ -509,11 +522,25 @@ elif st.session_state.tela == "painel":
             imp_cls  = "stv v" if imp > 0 else "stv z"
             th_cls   = "stv v" if th  > 0 else "stv z"
 
+            # Justificativa badge para ruptura
+            chave_r = f"{sid}_{vendedor_sel}"
+            if "justificativas_salvas" not in st.session_state:
+                st.session_state["justificativas_salvas"] = {}
+            just_salva_r = st.session_state["justificativas_salvas"].get(chave_r, {}).get("justificativa", "")
+            if not just_salva_r and not df_just.empty and "Justificativas" in df_just.columns:
+                col_id_r = "Customer Number" if "Customer Number" in df_just.columns else df_just.columns[0]
+                df_fil_r = df_just[df_just[col_id_r].astype(str).str.strip() == str(sid).strip()]
+                if not df_fil_r.empty:
+                    just_salva_r = str(df_fil_r.iloc[0]["Justificativas"]).strip()
+
+            is_rupt = str(rupt).strip().lower() not in ["", "nan", "none", "0", "nao", "não", "no"]
+            just_badge_r = f'<span class="bdg just">✏️ {just_salva_r[:30]}{"…" if len(just_salva_r)>30 else ""}</span>' if just_salva_r else ""
+
             st.markdown(f"""
 <div class="{card_cls}">
   <div class="cnome">{nome}</div>
   <div class="cinfo">{bairro} · {cidade} · #{sid}</div>
-  <div class="bdgs">{badge_ruptura(rupt)}{dev_bdg}{comp_bdg}</div>
+  <div class="bdgs">{badge_ruptura(rupt)}{dev_bdg}{comp_bdg}{just_badge_r}</div>
   <div class="srow">
     <div class="st2"><span class="stl">Impulso</span><span class="{imp_cls}">{imp} cx</span><span class="stl" style="margin-top:2px;">{fmt_brl_v(vd.get("imp_vl",0))}</span></div>
     <div class="st2"><span class="stl">Take Home</span><span class="{th_cls}">{th} cx</span><span class="stl" style="margin-top:2px;">{fmt_brl_v(vd.get("th_vl",0))}</span></div>
@@ -523,6 +550,49 @@ elif st.session_state.tela == "painel":
     </div>
   </div>
 </div>""", unsafe_allow_html=True)
+
+            # Botão e painel de justificativa (só para clientes em ruptura)
+            if is_rupt:
+                chave_aberto_r = f"aberto_rota_{chave_r}"
+                label_btn_r = "✏️ Editar justificativa" if just_salva_r else "✏️ Justificar ruptura"
+                if st.button(label_btn_r, key=f"btnr_{chave_r}"):
+                    st.session_state[chave_aberto_r] = not st.session_state.get(chave_aberto_r, False)
+
+                if st.session_state.get(chave_aberto_r, False):
+                    txt_r = st.text_area(
+                        "Motivo da ruptura:",
+                        value=just_salva_r,
+                        placeholder="Ex: Cliente sem espaço, concorrente com promoção...",
+                        key=f"txt_r_{chave_r}"
+                    )
+                    c1r, c2r = st.columns([1, 1])
+                    with c1r:
+                        if st.button("💾 Salvar", key=f"salvar_r_{chave_r}"):
+                            if txt_r.strip():
+                                erro_r = salvar_justificativa(vendedor_sel, nome, sid, txt_r.strip())
+                                carregar_justificativas.clear()
+                                if not erro_r:
+                                    st.success("✅ Justificativa salva!")
+                                    st.session_state[chave_aberto_r] = False
+                                    st.rerun()
+                                else:
+                                    st.warning(f"⚠️ Salvo localmente. Erro: {erro_r}")
+                            else:
+                                st.warning("Digite uma justificativa antes de salvar.")
+                    with c2r:
+                        if st.button("Cancelar", key=f"cancelr_{chave_r}"):
+                            st.session_state[chave_aberto_r] = False
+                            st.rerun()
+
+    col_btn1, col_btn2, col_btn3 = st.columns([2, 2, 3])
+    with col_btn1:
+        if st.button("← Trocar vendedor"):
+            st.session_state.tela = "selecao"
+            st.rerun()
+    with col_btn2:
+        if st.button("🔄 Atualizar dados"):
+            st.cache_data.clear()
+            st.rerun()
 
     aba_hoje, aba_ontem, aba_semana, aba_rupt = st.tabs(["Hoje", "Ontem", "Semana toda", "📋 Base de clientes"])
 
@@ -725,13 +795,4 @@ elif st.session_state.tela == "painel":
 
                     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("← Trocar vendedor"):
-            st.session_state.tela = "selecao"
-            st.rerun()
-    with col2:
-        if st.button("🔄 Atualizar dados"):
-            st.cache_data.clear()
-            st.rerun()
+
