@@ -440,7 +440,49 @@ elif st.session_state.tela == "resumo":
 # ════════════════════════════════════════════════════════════════════════════
 # TELA 2 — PAINEL DO VENDEDOR
 # ════════════════════════════════════════════════════════════════════════════
-elif st.session_state.tela == "painel":
+# ── Salvar justificativa na coluna Justificativas da aba RUPTURA ──
+def salvar_justificativa(vendedor, cliente, sid, justificativa):
+    chave = f"{sid}_{vendedor}"
+    if "justificativas_salvas" not in st.session_state:
+        st.session_state["justificativas_salvas"] = {}
+    st.session_state["justificativas_salvas"][chave] = {"justificativa": justificativa}
+    erro_sheets = None
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet("RUPTURA")
+        headers = [h.strip() for h in ws.row_values(1)]
+        col_id = None
+        for nome in ["Customer Number", "Sold", "sold", "customer number", "ID", "id"]:
+            if nome in headers:
+                col_id = headers.index(nome) + 1
+                break
+        if col_id is None:
+            col_id = 1
+        try:
+            col_just = headers.index("Justificativas") + 1
+        except ValueError:
+            return "Coluna Justificativas nao encontrada na aba RUPTURA"
+        ids = ws.col_values(col_id)
+        linha = None
+        for i, val in enumerate(ids):
+            if str(val).strip() == str(sid).strip():
+                linha = i + 1
+                break
+        if linha:
+            ws.update_cell(linha, col_just, justificativa)
+        else:
+            erro_sheets = f"Cliente {sid} nao encontrado na aba RUPTURA"
+    except Exception as e:
+        erro_sheets = str(e)
+    return erro_sheets
+
+if st.session_state.tela == "painel":
     vend = st.session_state.vend
     dfv  = df_rot[df_rot["_vendedor"] == vend].copy()
 
@@ -640,57 +682,7 @@ elif st.session_state.tela == "painel":
             except Exception:
                 return pd.DataFrame()
 
-        # ── Salvar justificativa na coluna Justificativas da aba RUPTURA ──
-        def salvar_justificativa(vendedor, cliente, sid, justificativa):
-            # Salva no session_state para feedback imediato
-            chave = f"{sid}_{vendedor}"
-            if "justificativas_salvas" not in st.session_state:
-                st.session_state["justificativas_salvas"] = {}
-            st.session_state["justificativas_salvas"][chave] = {
-                "justificativa": justificativa
-            }
 
-            # Salva no Google Sheets — coluna Justificativas da aba RUPTURA
-            erro_sheets = None
-            try:
-                import gspread
-                from google.oauth2.service_account import Credentials
-                creds_dict = dict(st.secrets["gcp_service_account"])
-                scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-                creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-                gc = gspread.authorize(creds)
-                sh = gc.open_by_key(SHEET_ID)
-                ws = sh.worksheet("RUPTURA")
-                headers = ws.row_values(1)
-                headers = [h.strip() for h in headers]
-                # Coluna do ID do cliente
-                col_id = None
-                for nome in ["Customer Number", "Sold", "sold", "customer number", "ID", "id"]:
-                    if nome in headers:
-                        col_id = headers.index(nome) + 1
-                        break
-                if col_id is None:
-                    col_id = 1
-                # Coluna Justificativas
-                try:
-                    col_just = headers.index("Justificativas") + 1
-                except ValueError:
-                    erro_sheets = "Coluna Justificativas nao encontrada na aba RUPTURA"
-                    return erro_sheets
-                # Encontra a linha do cliente pelo ID
-                ids = ws.col_values(col_id)
-                linha = None
-                for i, val in enumerate(ids):
-                    if str(val).strip() == str(sid).strip():
-                        linha = i + 1
-                        break
-                if linha:
-                    ws.update_cell(linha, col_just, justificativa)
-                else:
-                    erro_sheets = f"Cliente {sid} nao encontrado na aba RUPTURA"
-            except Exception as e:
-                erro_sheets = str(e)
-            return erro_sheets
 
         # ── Estado para cliente selecionado ───────────────────────────
         if "cliente_aberto" not in st.session_state:
