@@ -86,10 +86,13 @@ def safe_int(v):
 def parse_valor(v):
     import re
     try:
-        s = str(v).replace("R$","").strip()
+        s = str(v).replace("R$", "").strip()
+        negativo = s.startswith("-")
+        s = s.lstrip("-").strip()
         s = re.sub(r'\.(?=\d{3})', '', s)
-        s = s.replace(",",".")
-        return float(s)
+        s = s.replace(",", ".")
+        resultado = float(s)
+        return -resultado if negativo else resultado
     except:
         return 0.0
 
@@ -370,22 +373,14 @@ elif st.session_state.tela == "resumo":
         dfr["_cx"] = dfr[ccx].apply(safe_int) if ccx else 0
         dfr["_vl"] = dfr[cvl].apply(parse_valor) if cvl else 0.0
 
-        # Separar vendas e devoluções
-        df_venda = dfr[dfr["_s"] == "VENDA"]
-        df_dev   = dfr[dfr["_s"] == "DEVOLUÇÃO"]
+        # Devoluções já vêm com valores negativos no Sheets — soma direta = líquido
+        imp = dfr[dfr["_c"].str.contains("IMPULSO", na=False)]
+        th  = dfr[dfr["_c"].str.contains("TAKE HOME|NOBRELLI|MONDELEZ|NESTL|PRIVATE|CANAL PRO|GAROTO", na=False) & ~dfr["_c"].str.contains("IMPULSO", na=False)]
 
-        # Impulso: vendas - devoluções
-        imp_v = df_venda[df_venda["_c"].str.contains("IMPULSO", na=False)]
-        imp_d = df_dev[df_dev["_c"].str.contains("IMPULSO", na=False)]
-        imp_cx = int(imp_v["_cx"].sum()) - int(imp_d["_cx"].sum())
-        imp_vl = imp_v["_vl"].sum() - imp_d["_vl"].sum()
-
-        # Take Home: vendas - devoluções
-        filtro_th = "TAKE HOME|NOBRELLI|MONDELEZ|NESTL|PRIVATE|CANAL PRO|GAROTO"
-        th_v = df_venda[df_venda["_c"].str.contains(filtro_th, na=False) & ~df_venda["_c"].str.contains("IMPULSO", na=False)]
-        th_d = df_dev[df_dev["_c"].str.contains(filtro_th, na=False) & ~df_dev["_c"].str.contains("IMPULSO", na=False)]
-        th_cx = int(th_v["_cx"].sum()) - int(th_d["_cx"].sum())
-        th_vl = th_v["_vl"].sum() - th_d["_vl"].sum()
+        imp_cx = int(imp["_cx"].sum())
+        imp_vl = imp["_vl"].sum()
+        th_cx  = int(th["_cx"].sum())
+        th_vl  = th["_vl"].sum()
         tot_cx = imp_cx + th_cx;        tot_vl = imp_vl + th_vl
 
         st.markdown('<div class="slbl">Vendas do mês</div>', unsafe_allow_html=True)
