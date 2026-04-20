@@ -19,7 +19,7 @@ def topbar(titulo, sub):
       <div class="sub">{sub}</div>
     </div>"""
 
-SHEET_ID = "1WsCcvV4M_jDl35EfXz_ryV3FeZmKzJwaO91ZfB68gAI"
+SHEET_ID = "1ewXcWuiLOCtv609Y-xKKg-qQwOuu21Bq"
 DIAS_PT = {0:"Segunda-feira",1:"Terça-feira",2:"Quarta-feira",3:"Quinta-feira",4:"Sexta-feira",5:"Sábado",6:"Domingo"}
 
 st.set_page_config(page_title="Painel Froneri", page_icon="🧊", layout="centered", initial_sidebar_state="collapsed")
@@ -547,70 +547,6 @@ elif st.session_state.tela == "painel":
                         "1 Mês":"rupt1","SEM KV":"rupt2","C/ Compra":"rupt0",
                         "c/ compra":"rupt0","c/compra":"rupt0","Cliente Novo":"rupt0"}
 
-        # ── Carregar justificativas já salvas ──────────────────────────
-        @st.cache_data(ttl=120)
-        def carregar_justificativas():
-            try:
-                url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-                r = requests.get(url, timeout=30)
-                try:
-                    df_j = pd.read_excel(io.BytesIO(r.content), sheet_name="Justificativas", engine="openpyxl")
-                    df_j.columns = df_j.columns.str.strip()
-                    df_j = df_j.dropna(how="all")
-                    return df_j
-                except Exception:
-                    return pd.DataFrame(columns=["Vendedor","Cliente","ID","Justificativa","Data","Hora"])
-            except Exception:
-                return pd.DataFrame(columns=["Vendedor","Cliente","ID","Justificativa","Data","Hora"])
-
-        # ── Salvar justificativa ──────────────────────────────────────
-        def salvar_justificativa(vendedor, cliente, sid, justificativa):
-            from datetime import datetime
-            agora = datetime.now()
-            data  = agora.strftime("%d/%m/%Y")
-            hora  = agora.strftime("%H:%M")
-
-            # Salva no session_state para feedback imediato
-            chave = f"{sid}_{vendedor}"
-            if "justificativas_salvas" not in st.session_state:
-                st.session_state["justificativas_salvas"] = {}
-            st.session_state["justificativas_salvas"][chave] = {
-                "justificativa": justificativa,
-                "data": data,
-                "hora": hora
-            }
-
-            # Salva no Google Sheets via gspread
-            erro_sheets = None
-            try:
-                import gspread
-                from google.oauth2.service_account import Credentials
-                creds_dict = dict(st.secrets["gcp_service_account"])
-                scopes = [
-                    "https://spreadsheets.google.com/feeds",
-                    "https://www.googleapis.com/auth/drive"
-                ]
-                creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-                gc = gspread.authorize(creds)
-                sh = gc.open_by_key(SHEET_ID)
-                try:
-                    ws = sh.worksheet("Justificativas")
-                except gspread.exceptions.WorksheetNotFound:
-                    ws = sh.add_worksheet(title="Justificativas", rows=1000, cols=6)
-                    ws.append_row(["Vendedor","Cliente","ID","Justificativa","Data","Hora"])
-                ws.append_row([vendedor, cliente, sid, justificativa, data, hora])
-            except Exception as e:
-                erro_sheets = str(e)
-            return erro_sheets
-
-        # ── Estado para cliente selecionado ───────────────────────────
-        if "cliente_aberto" not in st.session_state:
-            st.session_state["cliente_aberto"] = None
-        if "justificativas_salvas" not in st.session_state:
-            st.session_state["justificativas_salvas"] = {}
-
-        df_just = carregar_justificativas()
-
         # All clients sorted by city
         df_base = dfv.copy()
         df_base = df_base.sort_values(["_cidade","_nome"])
@@ -625,90 +561,19 @@ elif st.session_state.tela == "painel":
             bairro = row["_bairro"]
             rupt   = str(row["_ruptura"]).strip()
             cls    = RUPT_CLS_MAP.get(rupt, "rupt2")
-            chave  = f"{sid}_{vend}"
-
-            # Busca justificativa já salva (session ou sheets)
-            just_salva = ""
-            data_salva = ""
-            if chave in st.session_state["justificativas_salvas"]:
-                just_salva = st.session_state["justificativas_salvas"][chave]["justificativa"]
-                data_salva = st.session_state["justificativas_salvas"][chave]["data"] + " " + st.session_state["justificativas_salvas"][chave]["hora"]
-            elif not df_just.empty and "ID" in df_just.columns:
-                df_fil = df_just[(df_just["ID"].astype(str) == str(sid)) & (df_just["Vendedor"].astype(str) == vend)]
-                if not df_fil.empty:
-                    just_salva = str(df_fil.iloc[-1].get("Justificativa",""))
-                    data_salva = str(df_fil.iloc[-1].get("Data","")) + " " + str(df_fil.iloc[-1].get("Hora",""))
 
             if cidade != cidade_atual:
                 cidade_atual = cidade
                 st.markdown(f'<div class="slbl" style="margin-top:12px;">{cidade}</div>', unsafe_allow_html=True)
 
-            aberto = st.session_state["cliente_aberto"] == chave
-
-            col_card, col_btn = st.columns([6, 1])
-            with col_card:
-                borda_cor = "#00BCD4" if aberto else "#E0F7FA"
-                rupt_label = rupt if rupt not in ["","nan","none","-"] else "—"
-                just_badge_html = '<br><span style="font-size:10px;color:#16A34A;font-weight:600;">✓ Justificado</span>' if just_salva else ""
-                just_info_html = f'<div style="font-size:11px;color:#64748B;margin-top:6px;border-top:1px solid #F1F5F9;padding-top:6px;">📝 {just_salva}<br><span style="color:#94A3B8;">{data_salva}</span></div>' if just_salva and not aberto else ""
-                st.markdown(f"""
-<div style="background:#fff;border:1px solid {borda_cor};border-radius:10px;padding:10px 14px;margin-bottom:4px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-size:13px;font-weight:600;color:#1A1A2E;">{nome}</div>
-      <div style="font-size:11px;color:#94A3B8;">{bairro} · #{sid}</div>
-    </div>
-    <div style="text-align:right;">
-      <span class="bdg {cls}">{rupt_label}</span>
-      {just_badge_html}
-    </div>
+            st.markdown(f"""
+<div style="background:#fff;border:1px solid #E0F7FA;border-radius:10px;padding:10px 14px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;">
+  <div>
+    <div style="font-size:13px;font-weight:600;color:#1A1A2E;">{nome}</div>
+    <div style="font-size:11px;color:#94A3B8;">{bairro} · #{sid}</div>
   </div>
-  {just_info_html}
+  <span class="bdg {cls}">{rupt if rupt not in ["","nan","none","-"] else "—"}</span>
 </div>""", unsafe_allow_html=True)
-
-            with col_btn:
-                st.markdown("<div style='margin-top:6px;'>", unsafe_allow_html=True)
-                label_btn = "✕" if aberto else "✏️"
-                if st.button(label_btn, key=f"btn_{chave}"):
-                    st.session_state["cliente_aberto"] = None if aberto else chave
-                    st.rerun()
-
-            # Painel de justificativa expandido
-            if aberto:
-                with st.container():
-                    st.markdown(f"""
-<div style="background:#F0FDFA;border:1.5px solid #00BCD4;border-radius:10px;padding:14px;margin-bottom:10px;">
-  <div style="font-size:13px;font-weight:700;color:#006F8E;margin-bottom:8px;">📝 Justificativa de ruptura — {nome}</div>
-""", unsafe_allow_html=True)
-
-                    txt = st.text_area(
-                        "Descreva o motivo da ruptura:",
-                        value=just_salva,
-                        height=100,
-                        key=f"txt_{chave}",
-                        placeholder="Ex: Cliente sem estoque, aguardando pedido, estabelecimento fechado..."
-                    )
-
-                    col_s, col_c = st.columns(2)
-                    with col_s:
-                        if st.button("💾 Salvar", key=f"salvar_{chave}"):
-                            if txt.strip():
-                                erro = salvar_justificativa(vend, nome, sid, txt.strip())
-                                st.session_state["cliente_aberto"] = None
-                                carregar_justificativas.clear()
-                                if erro:
-                                    st.warning(f"Salvo localmente. Erro no Sheets: {erro}")
-                                else:
-                                    st.success("Justificativa salva no Google Sheets! ✅")
-                                st.rerun()
-                            else:
-                                st.warning("Digite uma justificativa antes de salvar.")
-                    with col_c:
-                        if st.button("Cancelar", key=f"cancel_{chave}"):
-                            st.session_state["cliente_aberto"] = None
-                            st.rerun()
-
-                    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
