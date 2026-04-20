@@ -580,25 +580,28 @@ elif st.session_state.tela == "painel":
                 "hora": hora
             }
 
-            # Tenta salvar no Google Sheets via gspread (requer secrets configurados)
+            # Salva no Google Sheets via gspread
+            erro_sheets = None
             try:
                 import gspread
                 from google.oauth2.service_account import Credentials
-                creds_dict = st.secrets.get("gcp_service_account", None)
-                if creds_dict:
-                    scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-                    creds = Credentials.from_service_account_info(dict(creds_dict), scopes=scopes)
-                    gc = gspread.authorize(creds)
-                    sh = gc.open_by_key(SHEET_ID)
-                    try:
-                        ws = sh.worksheet("Justificativas")
-                    except Exception:
-                        ws = sh.add_worksheet(title="Justificativas", rows=1000, cols=6)
-                        ws.append_row(["Vendedor","Cliente","ID","Justificativa","Data","Hora"])
-                    ws.append_row([vendedor, cliente, sid, justificativa, data, hora])
-            except Exception:
-                pass  # Sem credenciais ainda — salvo apenas no session_state
-            return True
+                creds_dict = dict(st.secrets["gcp_service_account"])
+                scopes = [
+                    "https://spreadsheets.google.com/feeds",
+                    "https://www.googleapis.com/auth/drive"
+                ]
+                creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                gc = gspread.authorize(creds)
+                sh = gc.open_by_key(SHEET_ID)
+                try:
+                    ws = sh.worksheet("Justificativas")
+                except gspread.exceptions.WorksheetNotFound:
+                    ws = sh.add_worksheet(title="Justificativas", rows=1000, cols=6)
+                    ws.append_row(["Vendedor","Cliente","ID","Justificativa","Data","Hora"])
+                ws.append_row([vendedor, cliente, sid, justificativa, data, hora])
+            except Exception as e:
+                erro_sheets = str(e)
+            return erro_sheets
 
         # ── Estado para cliente selecionado ───────────────────────────
         if "cliente_aberto" not in st.session_state:
@@ -690,10 +693,13 @@ elif st.session_state.tela == "painel":
                     with col_s:
                         if st.button("💾 Salvar", key=f"salvar_{chave}"):
                             if txt.strip():
-                                salvar_justificativa(vend, nome, sid, txt.strip())
+                                erro = salvar_justificativa(vend, nome, sid, txt.strip())
                                 st.session_state["cliente_aberto"] = None
                                 carregar_justificativas.clear()
-                                st.success("Justificativa salva!")
+                                if erro:
+                                    st.warning(f"Salvo localmente. Erro no Sheets: {erro}")
+                                else:
+                                    st.success("Justificativa salva no Google Sheets! ✅")
                                 st.rerun()
                             else:
                                 st.warning("Digite uma justificativa antes de salvar.")
