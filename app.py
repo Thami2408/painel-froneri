@@ -531,7 +531,7 @@ elif st.session_state.tela == "painel":
             if "justificativas_salvas" not in st.session_state:
                 st.session_state["justificativas_salvas"] = {}
             just_salva_r = st.session_state["justificativas_salvas"].get(chave_r, {}).get("justificativa", "")
-            if not just_salva_r and not df_just.empty and "Justificativas" in df_just.columns:
+            if not just_salva_r and df_just is not None and not df_just.empty and "Justificativas" in df_just.columns:
                 col_id_r = "Customer Number" if "Customer Number" in df_just.columns else df_just.columns[0]
                 df_fil_r = df_just[df_just[col_id_r].astype(str).str.strip() == str(sid).strip()]
                 if not df_fil_r.empty:
@@ -720,7 +720,7 @@ elif st.session_state.tela == "painel":
             just_salva = ""
             if chave in st.session_state["justificativas_salvas"]:
                 just_salva = st.session_state["justificativas_salvas"][chave]["justificativa"]
-            elif not df_just.empty and "Justificativas" in df_just.columns:
+            elif df_just is not None and not df_just.empty and "Justificativas" in df_just.columns:
                 col_id_just = "Customer Number" if "Customer Number" in df_just.columns else "Sold" if "Sold" in df_just.columns else df_just.columns[0]
                 df_fil = df_just[df_just[col_id_just].astype(str).str.strip() == str(sid).strip()]
                 if not df_fil.empty:
