@@ -86,10 +86,15 @@ def safe_int(v):
 def parse_valor(v):
     import re
     try:
-        s = str(v).replace("R$","").strip()
-        s = re.sub(r'\.(?=\d{3})', '', s)
-        s = s.replace(",",".")
+        s = str(v).replace("R$", "").strip()
+
+        # se tiver vírgula, ela é o decimal (padrão BR)
+        if "," in s:
+            s = s.replace(".", "")   # remove milhar
+            s = s.replace(",", ".")  # decimal
+
         return float(s)
+
     except:
         return 0.0
 
