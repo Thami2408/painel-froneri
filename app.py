@@ -644,20 +644,23 @@ elif st.session_state.tela == "painel":
 
             col_card, col_btn = st.columns([6, 1])
             with col_card:
-                just_badge = f'<span style="font-size:10px;color:#16A34A;font-weight:600;">✓ Justificado</span>' if just_salva else ""
+                borda_cor = "#00BCD4" if aberto else "#E0F7FA"
+                rupt_label = rupt if rupt not in ["","nan","none","-"] else "—"
+                just_badge_html = '<br><span style="font-size:10px;color:#16A34A;font-weight:600;">✓ Justificado</span>' if just_salva else ""
+                just_info_html = f'<div style="font-size:11px;color:#64748B;margin-top:6px;border-top:1px solid #F1F5F9;padding-top:6px;">📝 {just_salva}<br><span style="color:#94A3B8;">{data_salva}</span></div>' if just_salva and not aberto else ""
                 st.markdown(f"""
-<div style="background:#fff;border:1px solid {'#00BCD4' if aberto else '#E0F7FA'};border-radius:10px;padding:10px 14px;margin-bottom:4px;">
+<div style="background:#fff;border:1px solid {borda_cor};border-radius:10px;padding:10px 14px;margin-bottom:4px;">
   <div style="display:flex;align-items:center;justify-content:space-between;">
     <div>
       <div style="font-size:13px;font-weight:600;color:#1A1A2E;">{nome}</div>
       <div style="font-size:11px;color:#94A3B8;">{bairro} · #{sid}</div>
     </div>
     <div style="text-align:right;">
-      <span class="bdg {cls}">{rupt if rupt not in ["","nan","none","-"] else "—"}</span>
-      {'<br>' + just_badge if just_salva else ''}
+      <span class="bdg {cls}">{rupt_label}</span>
+      {just_badge_html}
     </div>
   </div>
-  {f'<div style="font-size:11px;color:#64748B;margin-top:6px;border-top:1px solid #F1F5F9;padding-top:6px;">📝 {just_salva}<br><span style="color:#94A3B8;">{data_salva}</span></div>' if just_salva and not aberto else ''}
+  {just_info_html}
 </div>""", unsafe_allow_html=True)
 
             with col_btn:
