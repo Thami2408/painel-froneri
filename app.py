@@ -588,7 +588,7 @@ if st.session_state.tela == "painel":
 
             # Justificativa badge para ruptura
             _vend_atual = _vend_fn
-            chave_r = f"{sid}_{_vend_atual}"
+            chave_r = f"{label}_{sid}_{_vend_atual}".replace(" ", "_")
             if "justificativas_salvas" not in st.session_state:
                 st.session_state["justificativas_salvas"] = {}
             just_salva_r = st.session_state["justificativas_salvas"].get(chave_r, {}).get("justificativa", "")
