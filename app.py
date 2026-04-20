@@ -145,14 +145,28 @@ def achar_col(df, nomes):
                 return c
     return None
 
-@st.cache_data(ttl=3600)
+@st.cache_resource
+def get_gc():
+    import gspread
+    from google.oauth2.service_account import Credentials
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(creds)
+
+def ws_to_df(ws):
+    data = ws.get_all_records()
+    df = pd.DataFrame(data)
+    df.columns = df.columns.str.strip()
+    df = df.dropna(how="all")
+    return df
+
 def carregar_roteiro():
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-        r = requests.get(url, timeout=30)
-        df = pd.read_excel(io.BytesIO(r.content), sheet_name="BASE ATIVA - ROTEIRIZADA", engine="openpyxl")
-        df.columns = df.columns.str.strip()
-        df = df.dropna(how="all")
+        gc = get_gc()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet("BASE ATIVA - ROTEIRIZADA")
+        df = ws_to_df(ws)
 
         col_id     = achar_col(df, ["sold","customer nu","numero","número","codigo","código"]) or df.columns[0]
         col_nome   = achar_col(df, ["customer name","razao","razão","nome"]) or df.columns[1]
@@ -189,11 +203,10 @@ def carregar_roteiro():
 @st.cache_data(ttl=300)
 def carregar_vendas():
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-        r = requests.get(url, timeout=30)
-        df = pd.read_excel(io.BytesIO(r.content), sheet_name="VENDAS", engine="openpyxl")
-        df.columns = df.columns.str.strip()
-        df = df.dropna(how="all")
+        gc = get_gc()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = sh.worksheet("VENDAS")
+        df = ws_to_df(ws)
 
         col_status = achar_col(df, ["status"])
         col_cat    = achar_col(df, ["categoria","category"])
@@ -334,12 +347,10 @@ elif st.session_state.tela == "resumo":
         return f"R$ {s}"
 
     try:
-        import requests, io as _io
-        url2 = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
-        r2 = requests.get(url2, timeout=30)
-        dfr = pd.read_excel(_io.BytesIO(r2.content), sheet_name="VENDAS", engine="openpyxl")
-        dfr.columns = dfr.columns.str.strip()
-        dfr = dfr.dropna(how="all")
+        gc2 = get_gc()
+        sh2 = gc2.open_by_key(SHEET_ID)
+        ws2 = sh2.worksheet("VENDAS")
+        dfr = ws_to_df(ws2)
 
         def ac2(nomes):
             for n in nomes:
