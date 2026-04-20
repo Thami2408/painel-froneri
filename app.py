@@ -85,17 +85,17 @@ def safe_int(v):
 
 def parse_valor(v):
     try:
-        s = str(v).upper().replace("R$", "").strip()
+        # se já for número, retorna direto
+        if isinstance(v, (int, float)):
+            return float(v)
 
-        negativo = "DEV" in s or "-" in s
+        s = str(v).replace("R$", "").strip()
 
-        s = s.replace("DEV", "")
-        s = s.replace(".", "")
-        s = s.replace(",", ".")
+        if "," in s:
+            s = s.replace(".", "")
+            s = s.replace(",", ".")
 
-        val = float(s)
-
-        return -val if negativo else val
+        return float(s)
 
     except:
         return 0.0
