@@ -84,19 +84,12 @@ def safe_int(v):
     except: return 0
 
 def parse_valor(v):
+    import re
     try:
-        # se já for número, retorna direto
-        if isinstance(v, (int, float)):
-            return float(v)
-
-        s = str(v).replace("R$", "").strip()
-
-        if "," in s:
-            s = s.replace(".", "")
-            s = s.replace(",", ".")
-
+        s = str(v).replace("R$","").strip()
+        s = re.sub(r'\.(?=\d{3})', '', s)
+        s = s.replace(",",".")
         return float(s)
-
     except:
         return 0.0
 
@@ -152,28 +145,14 @@ def achar_col(df, nomes):
                 return c
     return None
 
-@st.cache_resource
-def get_gc():
-    import gspread
-    from google.oauth2.service_account import Credentials
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    scopes = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    return gspread.authorize(creds)
-
-def ws_to_df(ws):
-    data = ws.get_all_records()
-    df = pd.DataFrame(data)
-    df.columns = df.columns.str.strip()
-    df = df.dropna(how="all")
-    return df
-
+@st.cache_data(ttl=3600)
 def carregar_roteiro():
     try:
-        gc = get_gc()
-        sh = gc.open_by_key(SHEET_ID)
-        ws = sh.worksheet("BASE ATIVA - ROTEIRIZADA")
-        df = ws_to_df(ws)
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
+        r = requests.get(url, timeout=30)
+        df = pd.read_excel(io.BytesIO(r.content), sheet_name="BASE ATIVA - ROTEIRIZADA", engine="openpyxl")
+        df.columns = df.columns.str.strip()
+        df = df.dropna(how="all")
 
         col_id     = achar_col(df, ["sold","customer nu","numero","número","codigo","código"]) or df.columns[0]
         col_nome   = achar_col(df, ["customer name","razao","razão","nome"]) or df.columns[1]
@@ -210,10 +189,11 @@ def carregar_roteiro():
 @st.cache_data(ttl=300)
 def carregar_vendas():
     try:
-        gc = get_gc()
-        sh = gc.open_by_key(SHEET_ID)
-        ws = sh.worksheet("VENDAS")
-        df = ws_to_df(ws)
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
+        r = requests.get(url, timeout=30)
+        df = pd.read_excel(io.BytesIO(r.content), sheet_name="VENDAS", engine="openpyxl")
+        df.columns = df.columns.str.strip()
+        df = df.dropna(how="all")
 
         col_status = achar_col(df, ["status"])
         col_cat    = achar_col(df, ["categoria","category"])
@@ -354,10 +334,12 @@ elif st.session_state.tela == "resumo":
         return f"R$ {s}"
 
     try:
-        gc2 = get_gc()
-        sh2 = gc2.open_by_key(SHEET_ID)
-        ws2 = sh2.worksheet("VENDAS")
-        dfr = ws_to_df(ws2)
+        import requests, io as _io
+        url2 = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
+        r2 = requests.get(url2, timeout=30)
+        dfr = pd.read_excel(_io.BytesIO(r2.content), sheet_name="VENDAS", engine="openpyxl")
+        dfr.columns = dfr.columns.str.strip()
+        dfr = dfr.dropna(how="all")
 
         def ac2(nomes):
             for n in nomes:
@@ -372,8 +354,7 @@ elif st.session_state.tela == "resumo":
         dfr["_s"]  = dfr[cs].astype(str).str.strip() if cs else "VENDA"
         dfr["_c"]  = dfr[cc].astype(str).str.upper().str.strip() if cc else ""
         dfr["_cx"] = dfr[ccx].apply(safe_int) if ccx else 0
-        dfr["_vl"] = pd.to_numeric(dfr[cvl], errors="coerce").fillna(0)
-        dfr.loc[dfr[cvl].astype(str).str.contains("DEV", case=False, na=False), "_vl"] *= -1
+        dfr["_vl"] = dfr[cvl].apply(parse_valor) if cvl else 0.0
         # Soma direta — devoluções já vêm com valor negativo no Sheets
         imp = dfr[dfr["_c"].str.contains("IMPULSO", na=False)]
         th  = dfr[dfr["_c"].str.contains("TAKE HOME|NOBRELLI|MONDELEZ|NESTL|PRIVATE|CANAL PRO|GAROTO", na=False) & ~dfr["_c"].str.contains("IMPULSO", na=False)]
