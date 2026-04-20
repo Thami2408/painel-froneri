@@ -365,7 +365,7 @@ elif st.session_state.tela == "resumo":
         dfr["_s"]  = dfr[cs].astype(str).str.strip() if cs else "VENDA"
         dfr["_c"]  = dfr[cc].astype(str).str.upper().str.strip() if cc else ""
         dfr["_cx"] = dfr[ccx].apply(safe_int) if ccx else 0
-        dfr["_vl"] = dfr[cvl].apply(parse_valor) if cvl else 0.0
+        dfr["_vl"] = pd.to_numeric(dfr[cvl], errors="coerce").fillna(0)
         dfr.loc[dfr[cvl].astype(str).str.contains("DEV", case=False, na=False), "_vl"] *= -1
         # Soma direta — devoluções já vêm com valor negativo no Sheets
         imp = dfr[dfr["_c"].str.contains("IMPULSO", na=False)]
